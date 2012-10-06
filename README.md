@@ -2,17 +2,17 @@ Gedit Custom Indent
 -------------------
 
 A plugin for gedit3 that allows to customize indentation settings for each 
-language
+language. This plugin does NOT work in gedit2.
 
 * Authors:
   * Leandro Vaz
-* Version: 0.0.1
+* Version: 0.1.0
 
 
 Installation
 ------------
 
-1. Download Custom Indent
+1. Download Custom Indent plugin
 2. Check if ~/.local/share/gedit/plugins/ directory exists. If not, create the
    missing directories.
 3. Copy the folder named customindent to ~/.local/share/gedit/plugins/
@@ -24,14 +24,15 @@ Usage
 -----
 
 The plugin manages indentation settings for your gedit. If you want to use
-this plugin, then you should not set indentation settings using the standard 
-way, but only with this plugin. To set indent settings, just open the 
+this plugin, then you should not set indentation settings from the preferences
+window, but only with this plugin. To set indentation settings, just open the 
 configuration dialog under Edit -> Preferences -> Plugins -> Custom Indent 
--> Preferences and select the languages you which to change indent settings.
-All settings are automatically applied once set. Finally, the plugin saves
-all settings to a file named settings.pkl under the plugin directory. For some
-reason, if the plugin does not initialize because the settings file is 
-corrupted, you should delete it.
+-> Preferences and select the languages from you which to change the 
+indentation settings.
+All settings are automatically applied to all documents once set. Finally, 
+the plugin saves all settings to a file named settings.pkl under the plugin 
+directory. For some reason, if the plugin does not initialize because the 
+settings file is corrupted, you should delete it. 
 
 
 License

@@ -34,14 +34,15 @@ class Settings(object):
     DEFAULT_USE_SPACES = True
 
     _settings = {}
-    _lm = GtkSource.LanguageManager()
+    _lang_map = {}
 
     @staticmethod
     def load():
         """Loads language settings."""
         settings_path = Settings.get_path()
+        lm = GtkSource.LanguageManager()
         if not os.path.exists(settings_path):
-            lang_ids = Settings._lm.get_language_ids()
+            lang_ids = lm.get_language_ids()
             for lang_id in lang_ids:
                 Settings._settings[lang_id] = (Settings.DEFAULT_TAB_WIDTH, 
                         Settings.DEFAULT_USE_SPACES)
@@ -53,6 +54,10 @@ class Settings(object):
                 sys.exit(1)
             Settings._settings = pickle.load(f)
             f.close()
+        # Associate language names to language ids.
+        for lang_id in lm.get_language_ids():
+            lang = lm.get_language(lang_id)
+            Settings._lang_map[lang.get_name()] = lang_id
 
     @staticmethod
     def save():
@@ -61,7 +66,7 @@ class Settings(object):
         try:
             f = open(settings_path, "wb")
         except IOError:
-            print "Failed to save settings."
+            print "Failed to open the settings file."
             sys.exit(1)
         pickle.dump(Settings._settings, f)
         f.close()
@@ -73,24 +78,53 @@ class Settings(object):
         return path + Settings.SETTINGS_FILENAME
 
     @staticmethod
-    def get_lang_settings():
-        """Returns language settings."""
-        return Settings._settings
+    def get_lang_names():
+        """Returns a list of language names."""
+        return Settings._lang_map.keys()
+
+    @staticmethod
+    def get_lang_id_from_name(lang_name):
+        """Returns a language id from it's name."""
+        if lang_name in Settings._lang_map:
+            return Settings._lang_map[lang_name]
+        return None
+
+    @staticmethod
+    def get_lang_settings(lang_id):
+        """Returns language settings for the specified language."""
+        return Settings._settings[lang_id]
+
+    @staticmethod
+    def set_lang_settings(lang_id, tab_width, use_spaces):
+        """Sets language settings for the specified language."""
+        Settings._settings[lang_id] = (tab_width, use_spaces)
+
+    @staticmethod
+    def get_lang_settings_from_name(lang_name):
+        """Returns language settings for the specified language."""
+        lang_id = Settings._lang_map[lang_name]
+        return Settings._settings[lang_id]
+
+    @staticmethod
+    def set_lang_settings_from_name(lang_name, tab_width, use_spaces):
+        """Sets language settings for the specified language."""
+        lang_id = Settings._lang_map[lang_name]
+        Settings.set_lang_settings(lang_id, tab_width, use_spaces)
 
 
 class ConfigWidget(object):
-    """Builds configuration UI objects. It does not represent the whole dialog,
-    but a child element that will be managed by gedit and plugged into a dialog.
+    """Builds configuration UI objects. It does not represent the whole dialog
+    but a GTK UI element that will be plugged into a dialog created by gedit.
     """
 
     def __init__(self):
         """Constructs the configuration widget."""
         self._root = None
-        self._combo = None
-        self._spin = None
-        self._check = None
+        self._combobox = None
+        self._spinbtn = None
+        self._checkbtn = None
         self._build()
-        
+
     def get_root(self):
         """Returns the root element of the widget."""
         return self._root
@@ -104,64 +138,65 @@ class ConfigWidget(object):
         """
         # Create languages combo box.
         store = Gtk.ListStore(GObject.TYPE_STRING)
-        for lang_id in sorted(Settings.get_lang_settings().keys()):
-            store.append([lang_id])
-        self._combo = Gtk.ComboBoxText()
-        self._combo.set_model(store)
-        self._combo.set_active(0)
+        for lang_name in sorted(Settings.get_lang_names()):
+            store.append([lang_name])
+        self._combobox = Gtk.ComboBoxText()
+        self._combobox.set_model(store)
+        self._combobox.set_active(0)
         # Create tab width spinner.
-        self._spin = Gtk.SpinButton()
-        self._spin.set_adjustment(Gtk.Adjustment(4, 1, 16, 1))
+        self._spinbtn = Gtk.SpinButton()
+        self._spinbtn.set_adjustment(Gtk.Adjustment(4, 1, 16, 1))
         # Create spaces check box.
-        self._check = Gtk.CheckButton()
+        self._checkbtn = Gtk.CheckButton()
         # Set event handlers.
-        self._combo.connect("changed", self._on_combo_changed)
-        self._spin.connect("value-changed", self._on_spin_changed)
-        self._check.connect("toggled", self._on_check_changed)
+        self._combobox.connect("changed", self._on_combobox_changed)
+        self._spinbtn.connect("value-changed", self._on_spinbtn_value_changed)
+        self._checkbtn.connect("toggled", self._on_checkbtn_toggled)
         # Pack.
         self._root = Gtk.Table(3, 2)
         self._root.attach(Gtk.Label("Language"), 0, 1, 0, 1, xpadding = 12)
-        self._root.attach(self._combo, 1, 2, 0, 1, ypadding = 6)
+        self._root.attach(self._combobox, 1, 2, 0, 1, ypadding = 6)
         self._root.attach(Gtk.Label("Tab width"), 0, 1, 1, 2, xpadding = 12)
-        self._root.attach(self._spin, 1, 2, 1, 2, ypadding = 6)
+        self._root.attach(self._spinbtn, 1, 2, 1, 2, ypadding = 6)
         self._root.attach(Gtk.Label("Use spaces"), 0, 1, 2, 3, xpadding = 12)
-        self._root.attach(self._check, 1, 2, 2, 3, ypadding = 6)
-        self._load(self._combo.get_active_text())
+        self._root.attach(self._checkbtn, 1, 2, 2, 3, ypadding = 6)
+        self._load(self._combobox.get_active_text())
 
-    def _on_combo_changed(self, combo):
-        """Called when language combobox changes it's value. Loads selected
+    def _on_combobox_changed(self, combobox):
+        """Called when language combo changes it's value. Loads the selected 
         language configuration.
         """
-        lang_id = combo.get_active_text()
+        lang_id = combobox.get_active_text()
         self._load(lang_id)
  
-    def _on_spin_changed(self, spin):
+    def _on_spinbtn_value_changed(self, spinbtn):
         """Called when the tabs width is changed. Saves language settings."""
-        self._save()        
+        self._save()
 
-    def _on_check_changed(self, check):
-        """Called when the tabs or spaces checkbox is changed. 
-        Saves language settings.
+    def _on_checkbtn_toggled(self, checkbtn):
+        """Called when the tabs or spaces checkbox is changed. Saves language 
+        settings.
         """
         self._save()
 
     def _save(self):
         """Save language settings from the configuration dialog."""
-        lang_id = self._combo.get_active_text()
-        tab_width = self._spin.get_value_as_int()
-        use_spaces = self._check.get_active()
-        Settings.get_lang_settings()[lang_id] = (tab_width, use_spaces)
+        lang_name = self._combobox.get_active_text()
+        tab_width = self._spinbtn.get_value_as_int()
+        use_spaces = self._checkbtn.get_active()
+        Settings.set_lang_settings_from_name(lang_name, tab_width, use_spaces)
+        lang_id = Settings.get_lang_id_from_name(lang_name)
         Context.apply_settings([lang_id])
 
-    def _load(self, lang_id):
+    def _load(self, lang_name):
         """Load language settings to configuration dialog."""
-        lang_settings = Settings.get_lang_settings()[lang_id]
-        self._spin.get_adjustment().set_value(lang_settings[0])
-        self._check.set_active(lang_settings[1])
+        tab_width, use_spaces = Settings.get_lang_settings_from_name(lang_name)
+        self._spinbtn.get_adjustment().set_value(tab_width)
+        self._checkbtn.set_active(use_spaces)
 
 
 class Context(object):
-    """Stores global objects."""
+    """Global context."""
 
     _window = None
 
@@ -176,61 +211,115 @@ class Context(object):
         return Context._window
 
     @staticmethod
+    def get_statusbar():
+        """Returns the window status bar."""
+        return Context.get_window().get_children()[0].get_children()[3]
+
+    @staticmethod
+    def get_statusbar_language_combobox():
+        """Returns the status bar combobox that changes the document
+        language.
+        """
+        return Context.get_statusbar().get_children()[3]
+
+    @staticmethod
+    def get_statusbar_tabwidth_combobox():
+        """Returns the status bar combobox that changes the document tab 
+        width.
+        """
+        return Context.get_statusbar().get_children()[4]
+
+    @staticmethod
     def apply_settings(lang_ids = []):
         """Applies current language settings from a specified language list to
-        opened documents."""
+        documents."""
         for doc in Context.get_window().get_documents():
             lang = doc.get_language()
-            if lang == None or (not lang.get_id() in lang_ids):
-                continue
-            view = Gedit.Tab.get_from_document(doc).get_view()
-            settings = Settings.get_lang_settings()[lang.get_id()]
-            view.set_tab_width(settings[0])
-            view.set_insert_spaces_instead_of_tabs(settings[1])
+            if lang != None and (lang.get_id() in lang_ids):
+                view = Gedit.Tab.get_from_document(doc).get_view()
+                lang_id = lang.get_id()
+                tab_width, use_spaces = Settings.get_lang_settings(lang_id)
+                view.set_tab_width(tab_width)
+                view.set_insert_spaces_instead_of_tabs(use_spaces)
 
 
 class CustomIndent(GObject.Object, Gedit.WindowActivatable, 
         PeasGtk.Configurable):
     """Plugin class instantiated by gedit plugin manager.
     
-    This class is also instantiated when the user tries to open the
-    configuration dialog. This caused some problems which implied the
-    implementation of Settings and Context classes with static methods. Other
-    classes might need to access the gedit window, and the easiest way to do it
-    is to expose it globally when the plugin is initialized.
+    This class is also instantiated everytime the user opens the configuration 
+    dialog, but the global the state is retained from the first instantiation.
+    The do_activate() method is called when the plugin loads for the first 
+    time and loads all definitions needed.
     """
 
     __gtype_name__ = "CustomIndent"
     window = GObject.property(type = Gedit.Window)
 
     def __init__(self):
-        """Initialize plugin and language settings."""
+        """Initialize plugin."""
         GObject.Object.__init__(self)
+        # Flag needed to control if the status bar tab width combo box events
+        # are called when a new document is loaded or when the user really
+        # tries to change the language settings.
+        self._tab_added = False
 
     def do_activate(self):
         """Load settings."""
         Settings.load()
         Context.init(self.window)
         Context.apply_settings()
-        self.window.connect("tab-added", self._on_tab_added)
+        Context.get_window().connect("tab-added", self._on_tab_added)
+        Context.get_statusbar_language_combobox().connect("changed", 
+            self._on_statusbar_language_combobox_changed)
+        Context.get_statusbar_tabwidth_combobox().connect("changed",
+            self._on_statusbar_tabwidth_combobox_changed)
 
     def do_deactivate(self):
         """Save settings."""
         Settings.save()
 
     def do_update_state(self):
-        """Do nothing."""
         pass
 
     def do_create_configure_widget(self):
-        """Create configuration widget."""
+        """Create and display configuration widget."""
         return ConfigWidget().get_root()
 
     def _on_tab_added(self, window, tab):
-        """Add event handlers to the new document."""
+        """Connect event handlers to the new document."""
+        self._tab_added = True
         tab.get_document().connect("loaded", self._on_document_loaded)
 
     def _on_document_loaded(self, document, error):
-        """Apply language settings to document."""
+        """Applies selected language settings to documents."""
         if document.get_language() != None:
-            Context.apply_settings([document.get_language().get_id()])
+            lang_id = document.get_language().get_id()
+            Context.apply_settings([lang_id])
+
+    def _on_statusbar_language_combobox_changed(self, combobox, item):
+        """Applies selected language settings to documents."""
+        lang_name = item.get_label()
+        lang_id = Settings.get_lang_id_from_name(lang_name)
+        if lang_id != None:
+            Context.apply_settings([lang_id])
+
+    def _on_statusbar_tabwidth_combobox_changed(self, combobox, item):
+        """Applies selected language settings to documents."""
+        doc = Context.get_window().get_active_document()
+        lang = doc.get_language()
+        if lang == None: return
+        lang_id = doc.get_language().get_id()
+        if type(item) == Gtk.CheckMenuItem:
+            tab_width, use_spaces = Settings.get_lang_settings(lang_id)
+            use_spaces = item.get_active()
+            Settings.set_lang_settings(lang_id, tab_width, use_spaces)
+            Context.apply_settings([lang_id])
+        else:
+            if self._tab_added:
+                self._tab_added = False
+                return
+            tab_width, use_spaces = Settings.get_lang_settings(lang_id)
+            tab_width = int(item.get_label())
+            Settings.set_lang_settings(lang_id, tab_width, use_spaces)
+            Context.apply_settings([lang_id])
