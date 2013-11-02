@@ -18,7 +18,7 @@
 
 import os
 try:
-    import cPickle as pickle
+    import pickle as pickle
 except:
     import pickle
 import sys
@@ -50,7 +50,7 @@ class Settings(object):
             try:
                 f = open(settings_path, "rb")
             except IOError:
-                print "Failed to load settings."
+                print("Failed to load settings.")
                 sys.exit(1)
             Settings._settings = pickle.load(f)
             f.close()
@@ -66,7 +66,7 @@ class Settings(object):
         try:
             f = open(settings_path, "wb")
         except IOError:
-            print "Failed to open the settings file."
+            print("Failed to open the settings file.")
             sys.exit(1)
         pickle.dump(Settings._settings, f)
         f.close()
@@ -80,7 +80,7 @@ class Settings(object):
     @staticmethod
     def get_lang_names():
         """Returns a list of language names."""
-        return Settings._lang_map.keys()
+        return list(Settings._lang_map.keys())
 
     @staticmethod
     def get_lang_id_from_name(lang_name):
