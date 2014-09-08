@@ -74,7 +74,9 @@ class Settings(object):
     @staticmethod
     def get_path():
         """Returns the settings file path."""
-        path = os.path.expanduser("~/.local/share/gedit/plugins/customindent/")
+        path = os.path.abspath(os.path.dirname (__file__))
+        path += os.path.sep
+        print(path + Settings.SETTINGS_FILENAME)
         return path + Settings.SETTINGS_FILENAME
 
     @staticmethod
